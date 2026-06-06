@@ -4,7 +4,7 @@
 
 // ── วิธีใช้: แก้ค่าด้านล่างนี้แล้วบันทึก ──────────────
 const SUPA_CONFIG = {
-  url: '',   // ← วาง Supabase URL ที่นี่  เช่น 'https://xxxx.supabase.co'
-  key: '',   // ← วาง anon key ที่นี่
+  url: 'https://vbppomgjrxjzgoutntsw.supabase.co',   // ← วาง Supabase URL ที่นี่  เช่น 'https://xxxx.supabase.co'
+  key: 'sb_publishable_moX-CHToHvmtPlVH6i1zag_7dH59vpv',   // ← วาง anon key ที่นี่
 };
 // ──────────────────────────────────────────────────────
