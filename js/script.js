@@ -899,18 +899,36 @@ function addNewRound() {
   renderAll();
 }
 
-function deleteCurrentRound() {
-  if(STOCK_ROUNDS.length <= 1) {
+async function deleteCurrentRound() {
+  if (STOCK_ROUNDS.length <= 1) {
     alert('ต้องเหลือรอบเช็กอย่างน้อย 1 รอบ');
     return;
   }
+
   const round = STOCK_ROUNDS[activeRoundIndex];
-  if(!confirm(`ต้องการลบรอบเช็ก ${round.date} ใช่ไหม?`)) return;
-  STOCK_ROUNDS.splice(activeRoundIndex, 1);
+  if (!round) return;
+
+  if (!confirm(`ต้องการลบรอบเช็ก ${round.date} ใช่ไหม?`)) return;
+
+  const { error } = await supabaseClient
+    .from('stock_rounds')
+    .delete()
+    .eq('round_date', round.date);
+
+  if (error) {
+    console.error('Delete round error:', error);
+    alert('ลบรอบเช็กไม่สำเร็จ: ' + error.message);
+    return;
+  }
+
   activeRoundIndex = Math.max(0, activeRoundIndex - 1);
+
+  await supabaseLoadRounds();
+
   syncItemsFromActiveRound();
-  saveStockChecks(false);
   renderAll();
+
+  alert('ลบรอบเช็กสำเร็จ');
 }
 
 function updateRoundMoney(field, value) {

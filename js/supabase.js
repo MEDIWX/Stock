@@ -45,19 +45,28 @@ async function connectSupabase(url, key) {
 
 // Save a single round to Supabase (upsert)
 async function supabaseSaveRound(roundIdx) {
-  if(!supabaseClient) return; // not connected, skip silently
+  if (!supabaseClient) return;
+
   const r = STOCK_ROUNDS[roundIdx];
-  if(!r) return;
+  if (!r) return;
+
   const payload = {
-    round_date:   r.date,
-    rent:         Number(r.rent) || 0,
-    withdraw:     Number(r.withdraw) || 0,
-    tables_json:  r.tables,
+    round_date: r.date,
+    rent: Number(r.rent) || 0,
+    withdraw: Number(r.withdraw) || 0,
+    tables_json: r.tables,
   };
+
   const { error } = await supabaseClient
     .from('stock_rounds')
     .upsert(payload, { onConflict: 'round_date' });
-  if(error) console.warn('Supabase save round error:', error);
+
+  if (error) {
+    console.warn('Supabase save round error:', error);
+    return;
+  }
+
+  await supabaseLoadRounds();
 }
 
 // Save all stock_items for current round

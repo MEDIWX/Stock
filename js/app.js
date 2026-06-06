@@ -1,3 +1,16 @@
+let DELETED_ROUND_DATES = JSON.parse(localStorage.getItem('DELETED_ROUND_DATES') || '[]');
+
+function rememberDeletedRound(date) {
+  if (!DELETED_ROUND_DATES.includes(date)) {
+    DELETED_ROUND_DATES.push(date);
+    localStorage.setItem('DELETED_ROUND_DATES', JSON.stringify(DELETED_ROUND_DATES));
+  }
+}
+
+function isDeletedRound(date) {
+  return DELETED_ROUND_DATES.includes(date);
+}
+
 // ==================== NAVIGATION ====================
 function getCurrentRoundTitle() {
   if(typeof STOCK_ROUNDS !== 'undefined' && STOCK_ROUNDS[activeRoundIndex]) {
@@ -132,6 +145,16 @@ if (modalEl) {
   modalEl.addEventListener('click', e => {
     if (e.target === modalEl) closeModal();
   });
+}
+
+function saveStockChecks(showAlert = true) {
+  localStorage.setItem('STOCK_ROUNDS_DATA', JSON.stringify(STOCK_ROUNDS));
+
+  supabaseSaveRound(activeRoundIndex);
+
+  if (showAlert) {
+    alert('บันทึกรอบเช็กสต็อกแล้ว ✓ (local + Supabase)');
+  }
 }
 
 // Override renderAll to include stock check page
