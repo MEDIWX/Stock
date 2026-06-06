@@ -4,7 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ระบบสต็อกสินค้า</title>
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- Google Fonts -->
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<!-- Styles -->
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -16,23 +20,29 @@
       <p>ระบบจัดการสต็อก</p>
     </div>
     <nav class="nav">
-      <div class="nav-item active" onclick="showPage('dashboard')">
+      <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard', this)">
         <span class="icon">📊</span> Dashboard
       </div>
-      <div class="nav-item" onclick="showPage('inventory')">
+      <div class="nav-item" data-page="inventory" onclick="showPage('inventory', this)">
         <span class="icon">📦</span> สต็อกสินค้า
       </div>
-      <div class="nav-item" onclick="showPage('stockcheck')">
+      <div class="nav-item" data-page="stockcheck" onclick="showPage('stockcheck', this)">
         <span class="icon">🧾</span> รอบเช็กสต็อก
       </div>
-      <div class="nav-item" onclick="showPage('restock')">
+      <div class="nav-item" data-page="restock" onclick="showPage('restock', this)">
         <span class="icon">🛒</span> รายการเติมของ
         <span class="nav-badge" id="restock-badge">0</span>
       </div>
-      <div class="nav-item" onclick="showPage('revenue')">
+      <div class="nav-item" data-page="revenue" onclick="showPage('revenue', this)">
         <span class="icon">💰</span> สรุปรายรับ
       </div>
+
     </nav>
+    <!-- DB status dot (hidden inputs for config) -->
+    <div style="padding:10px 16px; border-top:1px solid var(--border); display:flex; align-items:center; gap:6px;">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0;" id="sb-dot" title="Supabase status"></span>
+      <span style="font-size:10px;color:var(--text3);" id="sb-status-text">DB</span>
+    </div>
   </div>
 
   <!-- Main -->
@@ -185,7 +195,7 @@
           <div class="table-toolbar">
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <strong>🧾 รอบเช็กสต็อก</strong>
-              <select class="filter-select" id="round-select" onchange="switchRound(this.value)"></select>
+              <select class="filter-select" id="round-select" onchange="switchRound(this.value); document.getElementById('page-title').textContent = getCurrentRoundTitle();"></select>
               <button class="btn btn-ghost" onclick="addNewRound()">＋ เพิ่มรอบเช็กใหม่</button>
               <button class="btn btn-danger" onclick="deleteCurrentRound()">🗑 ลบรอบนี้</button>
               <button class="btn btn-primary" onclick="saveStockChecks()">💾 บันทึกรอบเช็ก</button>
@@ -387,7 +397,13 @@
   </div>
 </div>
 
-<script src="js/data.js"></script>
-<script src="js/script.js"></script>
+<!-- Scripts — load order matters -->
+<script src="js/data.js"></script>       <!-- ข้อมูลสินค้า + CAT_NAMES -->
+<script src="js/config.js"></script>     <!-- ★ แก้ตรงนี้: Supabase credentials -->
+<script src="js/utils.js"></script>      <!-- ฟังก์ชัน format, statusTag, catName -->
+<script src="js/render.js"></script>     <!-- render ทุกหน้า -->
+<script src="js/stockcheck.js"></script> <!-- ข้อมูล + logic รอบเช็กสต็อก -->
+<script src="js/supabase.js"></script>   <!-- Supabase realtime sync -->
+<script src="js/app.js"></script>        <!-- navigation, modal, export, init -->
 </body>
 </html>
