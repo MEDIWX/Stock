@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบสต็อกสินค้า</title>
+<!-- Supabase JS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<!-- Styles -->
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="logo">
+      <h1>🏪 Stock Pro</h1>
+      <p>ระบบจัดการสต็อก</p>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard', this)">
+        <span class="icon">📊</span> Dashboard
+      </div>
+      <div class="nav-item" data-page="inventory" onclick="showPage('inventory', this)">
+        <span class="icon">📦</span> สต็อกสินค้า
+      </div>
+      <div class="nav-item" data-page="stockcheck" onclick="showPage('stockcheck', this)">
+        <span class="icon">🧾</span> รอบเช็กสต็อก
+      </div>
+      <div class="nav-item" data-page="restock" onclick="showPage('restock', this)">
+        <span class="icon">🛒</span> รายการเติมของ
+        <span class="nav-badge" id="restock-badge">0</span>
+      </div>
+      <div class="nav-item" data-page="revenue" onclick="showPage('revenue', this)">
+        <span class="icon">💰</span> สรุปรายรับ
+      </div>
+
+    </nav>
+    <!-- DB status dot (hidden inputs for config) -->
+    <div style="padding:10px 16px; border-top:1px solid var(--border); display:flex; align-items:center; gap:6px;">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--text3);display:inline-block;flex-shrink:0;" id="sb-dot" title="Supabase status"></span>
+      <span style="font-size:10px;color:var(--text3);" id="sb-status-text">DB</span>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="header">
+      <div>
+        <div class="header-title" id="page-title">Dashboard สรุปภาพรวม</div>
+        <div class="header-sub" id="page-sub">รอบการตรวจสต็อก • อัปเดตล่าสุดวันนี้</div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-ghost" onclick="exportCSV()">📥 Export CSV</button>
+        <button class="btn btn-primary" onclick="openAddModal()">＋ เพิ่มสินค้า</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- DASHBOARD PAGE -->
+      <div class="page active" id="page-dashboard">
+        <div class="stats-grid">
+          <div class="stat-card blue">
+            <div class="stat-label">รายรับรอบนี้</div>
+            <div class="stat-value" id="stat-revenue">฿0</div>
+            <div class="stat-sub" id="stat-revenue-sub">จากยอดขายทั้งหมด</div>
+            <div class="stat-icon">💵</div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-label">สินค้าทั้งหมด</div>
+            <div class="stat-value" id="stat-total">0</div>
+            <div class="stat-sub" id="stat-total-sub">รายการในระบบ</div>
+            <div class="stat-icon">📦</div>
+          </div>
+          <div class="stat-card yellow">
+            <div class="stat-label">ต้องเติมสินค้า</div>
+            <div class="stat-value" id="stat-restock">0</div>
+            <div class="stat-sub">รายการต่ำกว่าเกณฑ์</div>
+            <div class="stat-icon">⚠️</div>
+          </div>
+          <div class="stat-card red">
+            <div class="stat-label">สินค้าหมด</div>
+            <div class="stat-value" id="stat-empty">0</div>
+            <div class="stat-sub">ต้องสั่งด่วน</div>
+            <div class="stat-icon">🚨</div>
+          </div>
+          <div class="stat-card purple">
+            <div class="stat-label">ต้นทุนสต็อก</div>
+            <div class="stat-value" id="stat-cost">฿0</div>
+            <div class="stat-sub">มูลค่าสินค้าคงคลัง</div>
+            <div class="stat-icon">🏦</div>
+          </div>
+        </div>
+
+        <div class="alert-grid">
+          <div class="alert-box">
+            <div class="alert-header">
+              <div class="alert-title"><div class="dot dot-red"></div> สินค้าหมด / ต้องสั่งด่วน</div>
+              <span class="alert-count" id="empty-count">0 รายการ</span>
+            </div>
+            <div class="alert-list" id="empty-list"></div>
+          </div>
+          <div class="alert-box">
+            <div class="alert-header">
+              <div class="alert-title"><div class="dot dot-yellow"></div> สินค้าใกล้หมด</div>
+              <span class="alert-count" id="low-count">0 รายการ</span>
+            </div>
+            <div class="alert-list" id="low-list"></div>
+          </div>
+        </div>
+
+        <div class="table-wrap" style="margin-top:0">
+          <div style="padding:16px 18px; border-bottom:1px solid var(--border); font-size:13px; font-weight:700;">
+            📋 สินค้าขายดี (มียอดขายรอบนี้)
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>รายการสินค้า</th>
+                  <th>หมวด</th>
+                  <th class="num">ขายไป</th>
+                  <th class="num">ราคาขาย</th>
+                  <th class="num">รายรับ</th>
+                  <th>สถานะ</th>
+                </tr>
+              </thead>
+              <tbody id="bestseller-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- INVENTORY PAGE -->
+      <div class="page" id="page-inventory">
+        <div class="table-wrap">
+          <div class="table-toolbar">
+            <div style="display:flex; gap:4px; background:var(--surface2); padding:4px; border-radius:10px; overflow-x:auto; flex-wrap:nowrap;">
+              <div class="tab active" onclick="filterCat('all', this)">ทั้งหมด</div>
+              <div class="tab" onclick="filterCat('1', this)">ท่อ/ข้อต่อ</div>
+              <div class="tab" onclick="filterCat('2', this)">กาว/สี/อุปกรณ์</div>
+              <div class="tab" onclick="filterCat('3', this)">เครื่องมือ</div>
+              <div class="tab" onclick="filterCat('4', this)">ดอกสว่าน</div>
+              <div class="tab" onclick="filterCat('5', this)">ตะปู/สกรู</div>
+              <div class="tab" onclick="filterCat('6', this)">ประปา/สาย</div>
+              <div class="tab" onclick="filterCat('7', this)">บานพับ/ไฟฟ้า</div>
+              <div class="tab" onclick="filterCat('8', this)">หลอดไฟ</div>
+              <div class="tab" onclick="filterCat('9-14', this)">เบ็ดเตล็ด</div>
+            </div>
+          </div>
+          <div class="table-toolbar" style="padding-top:8px;">
+            <div class="search-wrap">
+              <span class="search-icon">🔍</span>
+              <input class="search-input" type="text" placeholder="ค้นหาสินค้า..." oninput="searchItems(this.value)" id="search-input">
+            </div>
+            <select class="filter-select" onchange="filterStatus(this.value)">
+              <option value="all">ทุกสถานะ</option>
+              <option value="ok">✓ OK</option>
+              <option value="low">เติมของ!</option>
+              <option value="empty">หมด!</option>
+              <option value="none">ไม่มีสถานะ</option>
+            </select>
+            <span style="margin-left:auto; font-size:12px; color:var(--text3);" id="item-count-label"></span>
+          </div>
+          <div class="table-container" style="max-height:calc(100vh - 280px); overflow-y:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:36px">#</th>
+                  <th>รายการสินค้า</th>
+                  <th>หมวด</th>
+                  <th class="num">ต้นทุน</th>
+                  <th class="num">ราคาขาย</th>
+                  <th class="num">สต็อก</th>
+                  <th class="num">ขายไป</th>
+                  <th class="num">รายรับ</th>
+                  <th>สถานะ</th>
+                  <th style="width:60px"></th>
+                </tr>
+              </thead>
+              <tbody id="inventory-table"></tbody>
+            </table>
+            <button class="add-row-btn" onclick="openAddModal()">＋ เพิ่มรายการสินค้าใหม่</button>
+          </div>
+        </div>
+      </div>
+
+
+
+      <!-- STOCK CHECK PAGE -->
+      <div class="page" id="page-stockcheck">
+        <div class="table-wrap" style="margin-bottom:16px;">
+          <div class="table-toolbar">
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <strong>🧾 รอบเช็กสต็อก</strong>
+              <select class="filter-select" id="round-select" onchange="switchRound(this.value); document.getElementById('page-title').textContent = getCurrentRoundTitle();"></select>
+              <button class="btn btn-ghost" onclick="addNewRound()">＋ เพิ่มรอบเช็กใหม่</button>
+              <button class="btn btn-danger" onclick="deleteCurrentRound()">🗑 ลบรอบนี้</button>
+              <button class="btn btn-primary" onclick="saveStockChecks()">💾 บันทึกรอบเช็ก</button>
+              <button class="btn btn-success" onclick="openRestockModal()">📦 เติมของ (ไม่กระทบ Statement)</button>
+            </div>
+            <span style="margin-left:auto; font-size:12px; color:var(--text3);" id="stockcheck-count-label"></span>
+          </div>
+          <div class="table-toolbar" style="padding-top:8px;">
+            <div class="search-wrap">
+              <span class="search-icon">🔍</span>
+              <input class="search-input" type="text" placeholder="ค้นหาสินค้าในรอบเช็กสต็อก (ทุกตาราง)..." oninput="searchStockCheck(this.value)" id="stockcheck-search-input">
+            </div>
+            <span style="margin-left:auto; font-size:12px; color:var(--text3);" id="stockcheck-search-result-label"></span>
+          </div>
+          <div class="stats-grid" style="padding:16px 18px; margin-bottom:0; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));">
+            <div class="stat-card blue"><div class="stat-label">ยอดขายรวมรอบนี้</div><div class="stat-value" id="sc-revenue">฿0</div><div class="stat-sub">รวมช่องเป็นเงินทุกตาราง</div></div>
+            <div class="stat-card green"><div class="stat-label">ยอดขายรวม × 45%</div><div class="stat-value" id="sc-45">฿0</div><div class="stat-sub">คิดส่วนแบ่ง 45%</div></div>
+            <div class="stat-card yellow"><div class="stat-label">ยอด 45% × 18%</div><div class="stat-value" id="sc-18">฿0</div><div class="stat-sub">ยอดที่นำไปหักจากยอดขายรวม</div></div>
+            <div class="stat-card purple"><div class="stat-label">หักรวมเหลือ</div><div class="stat-value" id="sc-after-deduct">฿0</div><div class="stat-sub">ยอดขายรวม - ยอด 45%×18%</div></div>
+            <div class="stat-card red"><div class="stat-label">ค่าเช่า</div><div class="stat-value"><input class="money-input" id="sc-rent" type="number" min="0" step="1" value="0" oninput="updateRoundMoney('rent', this.value)"></div><div class="stat-sub">กรอกเพิ่มได้</div></div>
+            <div class="stat-card red"><div class="stat-label">เบิกเงิน</div><div class="stat-value"><input class="money-input" id="sc-withdraw" type="number" min="0" step="1" value="0" oninput="updateRoundMoney('withdraw', this.value)"></div><div class="stat-sub">กรอกเพิ่มได้</div></div>
+            <div class="stat-card green"><div class="stat-label">เหลือจ่ายเบ็ดเสร็จ</div><div class="stat-value" id="sc-net">฿0</div><div class="stat-sub">หักรวมเหลือ - ค่าเช่า - เบิกเงิน</div></div>
+            <div class="stat-card blue"><div class="stat-label">จำนวนการขาย</div><div class="stat-value" id="sc-sold">0</div><div class="stat-sub">รวมช่องขายไป</div></div>
+          </div>
+        </div>
+        <div id="stockcheck-tables"></div>
+      </div>
+
+      <!-- RESTOCK PAGE -->
+      <div class="page" id="page-restock">
+        <div style="display:grid; grid-template-columns:1fr auto; gap:16px; align-items:start; margin-bottom:20px;">
+          <div>
+            <h2 style="font-size:16px; font-weight:700; margin-bottom:6px;">🛒 รายการที่ต้องเติมสินค้า</h2>
+            <p style="font-size:13px; color:var(--text3);">สินค้าที่มีสถานะ "เติมของ!" หรือ "หมด!" หรือจำนวนเหลือ 0 หรือต่ำกว่า</p>
+          </div>
+          <button class="btn btn-primary" onclick="printRestock()">🖨️ พิมพ์รายการ</button>
+        </div>
+        <div class="table-wrap">
+          <div class="table-container">
+            <table class="restock-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>รายการสินค้า</th>
+                  <th>หมวด</th>
+                  <th class="num">ราคาขาย</th>
+                  <th class="num">สต็อกเดิม</th>
+                  <th class="num">ขายไปแล้ว</th>
+                  <th class="num">เหลือ</th>
+                  <th>ความเร่งด่วน</th>
+                </tr>
+              </thead>
+              <tbody id="restock-table"></tbody>
+              <tfoot>
+                <tr class="cost-total" id="restock-total-row" style="display:none">
+                  <td colspan="3" style="font-weight:700; font-size:13px;">📊 รวมทั้งหมด</td>
+                  <td class="num" colspan="5" id="restock-summary"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- REVENUE PAGE - Monthly Statement -->
+      <div class="page" id="page-revenue">
+        <!-- Statement Header -->
+        <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px 24px; margin-bottom:20px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div>
+              <div style="font-size:18px; font-weight:700; color:var(--text);">📋 Statement รายรับประจำเดือน</div>
+              <div style="font-size:12px; color:var(--text3); margin-top:4px;" id="rev-period-label">กรุณาเลือกเดือน</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <div style="display:flex; flex-direction:column; gap:3px;">
+                <label style="font-size:10px; color:var(--text3); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">เดือน</label>
+                <select class="filter-select" id="rev-month" onchange="renderRevenue()">
+                  <option value="1">มกราคม</option><option value="2">กุมภาพันธ์</option>
+                  <option value="3">มีนาคม</option><option value="4">เมษายน</option>
+                  <option value="5">พฤษภาคม</option><option value="6">มิถุนายน</option>
+                  <option value="7">กรกฎาคม</option><option value="8">สิงหาคม</option>
+                  <option value="9">กันยายน</option><option value="10">ตุลาคม</option>
+                  <option value="11">พฤศจิกายน</option><option value="12">ธันวาคม</option>
+                </select>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:3px;">
+                <label style="font-size:10px; color:var(--text3); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">ปี (พ.ศ.)</label>
+                <input class="filter-select" id="rev-year" type="number" min="2560" max="2600" style="width:90px;" onchange="renderRevenue()">
+              </div>
+              <div style="display:flex; flex-direction:column; gap:3px;">
+                <label style="font-size:10px; color:var(--text3); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">รอบเช็ก</label>
+                <select class="filter-select" id="rev-round-filter" onchange="renderRevenue()">
+                  <option value="all">ทุกรอบในเดือน</option>
+                </select>
+              </div>
+              <button class="btn btn-ghost" style="align-self:flex-end;" onclick="printStatement()">🖨️ พิมพ์</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); margin-bottom:20px;">
+          <div class="stat-card blue">
+            <div class="stat-label">รายรับรวม</div>
+            <div class="stat-value" id="rev-total">฿0</div>
+            <div class="stat-sub">ยอดขายรวมในเดือนนี้</div>
+            <div class="stat-icon">💵</div>
+          </div>
+          <div class="stat-card red">
+            <div class="stat-label">ต้นทุนสินค้า</div>
+            <div class="stat-value" id="rev-cost">฿0</div>
+            <div class="stat-sub">ต้นทุนสินค้าที่ขายออกไป</div>
+            <div class="stat-icon">📦</div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-label">กำไรขั้นต้น</div>
+            <div class="stat-value" id="rev-profit">฿0</div>
+            <div class="stat-sub" id="rev-margin">อัตรากำไร —</div>
+            <div class="stat-icon">📈</div>
+          </div>
+          <div class="stat-card yellow">
+            <div class="stat-label">จำนวนรายการขาย</div>
+            <div class="stat-value" id="rev-items">0</div>
+            <div class="stat-sub">รายการที่มียอดขาย</div>
+            <div class="stat-icon">🛒</div>
+          </div>
+        </div>
+
+        <!-- Statement Table -->
+        <div class="table-wrap">
+          <div style="padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+            <div style="font-size:13px; font-weight:700;">💹 รายการขาย — Statement ประจำเดือน</div>
+            <div style="font-size:11px; color:var(--text3);" id="rev-round-count"></div>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>รายการสินค้า</th>
+                  <th>หมวด</th>
+                  <th class="num">ราคาขาย/ชิ้น</th>
+                  <th class="num">จำนวนที่ขาย</th>
+                  <th class="num">ต้นทุนรวม</th>
+                  <th class="num">รายรับ</th>
+                  <th class="num">กำไร</th>
+                </tr>
+              </thead>
+              <tbody id="revenue-table"></tbody>
+              <tfoot id="revenue-footer"></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2 id="modal-title">เพิ่มสินค้าใหม่</h2>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label class="form-label">ชื่อสินค้า</label>
+        <input class="form-input" id="f-name" placeholder="ชื่อสินค้า">
+      </div>
+      <div class="form-group">
+        <label class="form-label">หมวดหมู่</label>
+        <select class="form-input" id="f-cat">
+          <option value="1">1 - ท่อ/ข้อต่อ PVC</option>
+          <option value="2">2 - กาว/สี/อุปกรณ์</option>
+          <option value="3">3 - เครื่องมือ</option>
+          <option value="4">4 - ดอกสว่าน</option>
+          <option value="5">5 - ตะปู/สกรู</option>
+          <option value="6">6 - ประปา/สาย</option>
+          <option value="7">7 - บานพับ/ไฟฟ้า</option>
+          <option value="8">8 - หลอดไฟ</option>
+          <option value="9">9-14 - เบ็ดเตล็ด</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ต้นทุน (บาท)</label>
+        <input class="form-input" id="f-cost" type="number" placeholder="0" min="0" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">ราคาขาย (บาท)</label>
+        <input class="form-input" id="f-price" type="number" placeholder="0" min="0" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">จำนวนสต็อก</label>
+        <input class="form-input" id="f-stock" type="number" placeholder="0" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">ขายไปแล้ว (รอบนี้)</label>
+        <input class="form-input" id="f-sold" type="number" placeholder="0" min="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">รายรับ (บาท)</label>
+        <input class="form-input" id="f-revenue" type="number" placeholder="0" min="0" step="0.01">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="saveItem()">บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Restock Modal (เติมของใหม่ — ไม่กระทบ Statement) -->
+<div class="modal-overlay" id="restock-modal">
+  <div class="modal" style="width:560px;">
+    <h2>📦 เติมของเข้าสต็อก</h2>
+    <p style="font-size:12px;color:var(--text3);margin-top:-14px;margin-bottom:16px;">
+      ใช้เพิ่มจำนวนสต็อกได้ทุกเมื่อ โดยจะไม่ไปแก้ "ขายไป" หรือ "รายรับ" ของรอบเช็กปัจจุบัน —
+      Statement รายเดือนจะไม่ถูกรบกวน เพราะระบบจะปรับเฉพาะจำนวนคงเหลือ/ของเดิม ไม่แตะยอดขาย
+    </p>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label class="form-label">ค้นหาสินค้า</label>
+        <input class="form-input" id="rs-search" placeholder="พิมพ์ชื่อสินค้า..." oninput="renderRestockSearchResults(this.value)" autocomplete="off">
+      </div>
+      <div class="form-group full" id="rs-results" style="max-height:180px; overflow-y:auto; display:none; border:1px solid var(--border); border-radius:8px;"></div>
+      <div class="form-group full" id="rs-selected" style="display:none; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:13px;"></div>
+      <div class="form-group">
+        <label class="form-label">จำนวนที่เติมเข้า</label>
+        <input class="form-input" id="rs-qty" type="number" placeholder="0" min="1" step="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">จะเติมเข้ารอบ</label>
+        <select class="form-input" id="rs-target-round">
+          <option value="latest">รอบล่าสุด (แนะนำ)</option>
+          <option value="new">สร้างรอบเช็กใหม่อัตโนมัติ</option>
+        </select>
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--text3);margin-top:10px;">
+      หมายเหตุ: ของที่เติมจะถูกบวกเข้าช่อง "ของเดิม/มีจำนวน" และ "เหลือ/มีจำนวน" ของสินค้านั้นทันที
+      ไม่กระทบยอดขายของรอบ ถ้าเลือก "สร้างรอบเช็กใหม่" ระบบจะตั้งยอดขายของรอบใหม่เป็น 0 ให้อัตโนมัติเหมือนเพิ่มรอบเช็กปกติ
+    </p>
+    <div class="form-actions">
+      <button class="btn btn-ghost" onclick="closeRestockModal()">ยกเลิก</button>
+      <button class="btn btn-success" onclick="confirmRestock()">📦 เติมของ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts — load order matters -->
+<script src="js/data.js"></script>       <!-- ข้อมูลสินค้า + CAT_NAMES -->
+<script src="js/config.js"></script>     <!-- ★ แก้ตรงนี้: Supabase credentials -->
+<script src="js/utils.js"></script>      <!-- ฟังก์ชัน format, statusTag, catName -->
+<script src="js/render.js"></script>     <!-- render ทุกหน้า -->
+<script src="js/stockcheck.js"></script> <!-- ข้อมูล + logic รอบเช็กสต็อก -->
+<script src="js/supabase.js"></script>   <!-- Supabase realtime sync -->
+<script src="js/app.js"></script>        <!-- navigation, modal, export, init -->
+</body>
+</html>
