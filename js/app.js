@@ -181,36 +181,94 @@ function closeRestockModal() {
   document.getElementById('restock-modal').classList.remove('open');
 }
 
-// ค้นหาสินค้าจากรอบล่าสุด (รอบที่ index 0 ถือเป็นรอบล่าสุดเสมอ เพราะ addNewRound ใช้ unshift)
+// ค้นหาสินค้าจากทุกรอบ (ไม่จำกัดแค่รอบล่าสุด) เพื่อให้หาสินค้าที่มีเฉพาะในรอบเก่าเจอด้วย
+// ของที่เลือกจะถูกเติมเข้า "รอบล่าสุด" เสมอ (ดู confirmRestock) — ถ้าไม่มีในรอบล่าสุด จะเพิ่มรายการให้อัตโนมัติ
 function renderRestockSearchResults(val) {
   const q = (val || '').trim().toLowerCase();
   const box = document.getElementById('rs-results');
   if (!q) { box.style.display = 'none'; box.innerHTML = ''; return; }
 
-  const round = STOCK_ROUNDS[0]; // รอบล่าสุด
-  const matches = [];
-  round.tables.forEach((t, ti) => {
-    t.rows.forEach((r, ri) => {
-      if (String(r.name || '').toLowerCase().includes(q)) {
-        matches.push({ ti, ri, r, tableName: t.name });
-      }
+  // เก็บเฉพาะ "ชื่อสินค้าที่ไม่ซ้ำกัน" โดยอ้างอิงข้อมูลล่าสุดที่เจอของชื่อนั้น (ไล่จากรอบใหม่ไปรอบเก่า)
+  // พร้อมจดจำว่าชื่อนี้มีอยู่ในรอบล่าสุด (roundIndex 0) หรือไม่
+  const byName = new Map();
+  STOCK_ROUNDS.forEach((round, roundIdx) => {
+    round.tables.forEach((t, ti) => {
+      t.rows.forEach((r, ri) => {
+        const name = String(r.name || '');
+        if (!name.toLowerCase().includes(q)) return;
+        if (!byName.has(name)) {
+          byName.set(name, { ti, ri, r, tableName: t.name, foundInRoundIdx: roundIdx, existsInLatest: false });
+        }
+        if (roundIdx === 0) {
+          const entry = byName.get(name);
+          entry.existsInLatest = true;
+          entry.ti = ti; entry.ri = ri; entry.r = r; entry.tableName = t.name; // ใช้ข้อมูลจากรอบล่าสุดถ้ามี
+        }
+      });
     });
   });
+  const matches = Array.from(byName.values());
 
   if (!matches.length) {
     box.style.display = 'block';
-    box.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--text3);">ไม่พบสินค้านี้ในรอบล่าสุด</div>';
+    box.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--text3);">ไม่พบสินค้านี้ในรอบเช็กที่มีอยู่</div>';
     return;
   }
 
   box.style.display = 'block';
-  box.innerHTML = matches.slice(0, 30).map(m => `
+  box.innerHTML = matches.slice(0, 30).map((m, idx) => `
     <div style="padding:8px 12px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;"
          onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'"
-         onclick="selectRestockItem(${m.ti},${m.ri})">
-      <span>${escapeHTML(m.r.name||'')} <span style="color:var(--text3)">(${escapeHTML(m.tableName)})</span></span>
+         onclick="selectRestockItemByName('${escapeHTML(m.r.name||'').replace(/'/g,"\\'")}')">
+      <span>${escapeHTML(m.r.name||'')} <span style="color:var(--text3)">(${escapeHTML(m.tableName)})</span>
+        ${!m.existsInLatest ? '<span style="color:var(--yellow);">— มีแค่ในรอบเก่า จะเพิ่มเข้ารอบล่าสุดให้</span>' : ''}
+      </span>
       <span style="color:var(--text3)">เหลือ ${fmtN(m.r.remaining||0)}</span>
     </div>`).join('');
+}
+
+function selectRestockItemByName(name) {
+  const round = STOCK_ROUNDS[0]; // รอบล่าสุด
+  let found = null;
+  round.tables.forEach((t, ti) => {
+    t.rows.forEach((r, ri) => {
+      if (r.name === name) found = { ti, ri };
+    });
+  });
+
+  if (found) {
+    selectRestockItem(found.ti, found.ri);
+    return;
+  }
+
+  // ไม่มีสินค้านี้ในรอบล่าสุด -> หาข้อมูลต้นทุน/ราคาขายจากรอบที่เจอ แล้วเพิ่มรายการใหม่เข้ารอบล่าสุดให้อัตโนมัติ (จำนวนเริ่มต้น 0)
+  let template = null;
+  for (const r of STOCK_ROUNDS) {
+    for (const t of r.tables) {
+      const hit = t.rows.find(row => row.name === name);
+      if (hit) { template = { row: hit, tableNo: t.tableNo }; break; }
+    }
+    if (template) break;
+  }
+  if (!template) { alert('ไม่พบข้อมูลสินค้านี้'); return; }
+
+  const targetTable = round.tables.find(t => t.tableNo === template.tableNo) || round.tables[0];
+  const newRow = {
+    id: `${round.date}-${targetTable.tableNo}-${Math.random().toString(36).slice(2,8)}`,
+    cat: template.row.cat,
+    name: template.row.name,
+    shipping: template.row.shipping || 0,
+    cost: template.row.cost || 0,
+    totalCost: (template.row.shipping||0) + (template.row.cost||0),
+    profit45: ((template.row.shipping||0) + (template.row.cost||0)) * 1.45,
+    price: template.row.price || 0,
+    added: 0, previous: 0, totalStock: 0, remaining: 0, sold: 0, revenue: 0,
+    status: 'หมด!',
+  };
+  targetTable.rows.push(newRow);
+  const ri = targetTable.rows.length - 1;
+  const ti = round.tables.indexOf(targetTable);
+  selectRestockItem(ti, ri);
 }
 
 function selectRestockItem(ti, ri) {
@@ -226,8 +284,9 @@ function selectRestockItem(ti, ri) {
 
 async function confirmRestock() {
   if (!restockSelected) { alert('กรุณาเลือกสินค้าที่ต้องการเติมก่อน'); return; }
-  const qty = parseFloat(document.getElementById('rs-qty').value) || 0;
-  if (qty <= 0) { alert('กรุณาใส่จำนวนที่เติมเข้ามากกว่า 0'); return; }
+  const rawQty = parseFloat(document.getElementById('rs-qty').value) || 0;
+  const qty = Math.round(rawQty); // สต็อกนับเป็นชิ้น ไม่รับทศนิยม
+  if (qty <= 0) { alert('กรุณาใส่จำนวนที่เติมเข้าเป็นจำนวนเต็มมากกว่า 0'); return; }
   const targetMode = document.getElementById('rs-target-round').value;
 
   if (targetMode === 'new') {
@@ -256,15 +315,15 @@ async function confirmRestock() {
     activeRoundIndex = 0;
   }
 
-  // เติมของในรอบล่าสุด (index 0) เสมอ — บวกเข้า "ของเดิม/มีจำนวน" (previous) เพื่อบันทึกว่ามีการเติม
+  // เติมของในรอบล่าสุด (index 0) เสมอ — บวกเข้า "ลงใหม่" (added) เพื่อให้เห็นชัดว่ามีการลงของใหม่เข้ามา
   // และบวกเข้า "รวมสต็อก" (totalStock) กับ "เหลือ/มีจำนวน" (remaining) เท่ากันโดยตรง
-  // เพื่อไม่ให้กระทบ "ขายไป" (sold = totalStock - remaining) ของรอบนั้น ไม่ว่า added/previous เดิม
-  // จะตรงกับ totalStock เดิมหรือไม่ก็ตาม (กันบัคกรณีข้อมูลเก่าที่ totalStock ไม่เท่ากับ added+previous)
+  // เพื่อไม่ให้กระทบ "ขายไป" (sold = totalStock - remaining) ของรอบนั้น ไม่แตะ "ของเดิม" (previous)
+  // เพราะของเดิมคือยอดที่ยกมาจากรอบก่อน ไม่ใช่ของที่เพิ่งเติมเข้ามาตอนนี้
   const round = STOCK_ROUNDS[0];
   const row = round.tables[restockSelected.tableIndex].rows[restockSelected.rowIndex];
   const soldBefore = Math.max(0, (Number(row.totalStock) || 0) - Math.max(0, Number(row.remaining) || 0));
 
-  row.previous = (Number(row.previous) || 0) + qty;
+  row.added = (Number(row.added) || 0) + qty;
   row.totalStock = (Number(row.totalStock) || 0) + qty;
   row.remaining = (Number(row.remaining) || 0) + qty;
 

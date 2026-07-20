@@ -410,31 +410,33 @@
   <div class="modal" style="width:560px;">
     <h2>📦 เติมของเข้าสต็อก</h2>
     <p style="font-size:12px;color:var(--text3);margin-top:-14px;margin-bottom:16px;">
-      ใช้เพิ่มจำนวนสต็อกได้ทุกเมื่อ โดยจะไม่ไปแก้ "ขายไป" หรือ "รายรับ" ของรอบเช็กปัจจุบัน —
-      Statement รายเดือนจะไม่ถูกรบกวน เพราะระบบจะปรับเฉพาะจำนวนคงเหลือ/ของเดิม ไม่แตะยอดขาย
+      ใช้เพิ่มจำนวนสต็อกได้ทุกเมื่อ โดยจะ<strong>ไม่ไปแก้ "ขายไป" หรือ "รายรับ"</strong> ของรอบที่เติม —
+      Statement รายเดือนจะไม่ถูกรบกวน เพราะระบบจะปรับเฉพาะช่อง "ลงใหม่" และจำนวนคงเหลือ ไม่แตะยอดขาย
+      <br><strong style="color:var(--yellow);">⚠ การเติมของจะลงที่ "รอบล่าสุด" เสมอ ไม่ใช่รอบที่กำลังเปิดดูอยู่บนหน้าจอ</strong>
+      ค้นหาด้านล่างนี้จะค้นจากทุกรอบ เพื่อให้หาสินค้าที่อาจมีเฉพาะในรอบเก่าเจอด้วย
     </p>
     <div class="form-grid">
       <div class="form-group full">
-        <label class="form-label">ค้นหาสินค้า</label>
+        <label class="form-label">ค้นหาสินค้า (ค้นจากทุกรอบ)</label>
         <input class="form-input" id="rs-search" placeholder="พิมพ์ชื่อสินค้า..." oninput="renderRestockSearchResults(this.value)" autocomplete="off">
       </div>
       <div class="form-group full" id="rs-results" style="max-height:180px; overflow-y:auto; display:none; border:1px solid var(--border); border-radius:8px;"></div>
       <div class="form-group full" id="rs-selected" style="display:none; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:13px;"></div>
       <div class="form-group">
-        <label class="form-label">จำนวนที่เติมเข้า</label>
+        <label class="form-label">จำนวนที่เติมเข้า (จำนวนเต็ม)</label>
         <input class="form-input" id="rs-qty" type="number" placeholder="0" min="1" step="1">
       </div>
       <div class="form-group">
-        <label class="form-label">จะเติมเข้ารอบ</label>
+        <label class="form-label">จะเติมเข้ารอบล่าสุด หรือสร้างรอบใหม่</label>
         <select class="form-input" id="rs-target-round">
-          <option value="latest">รอบล่าสุด (แนะนำ)</option>
-          <option value="new">สร้างรอบเช็กใหม่อัตโนมัติ</option>
+          <option value="latest">เติมเข้ารอบล่าสุด (แนะนำ)</option>
+          <option value="new">สร้างรอบเช็กใหม่ก่อนเติม</option>
         </select>
       </div>
     </div>
     <p style="font-size:11px;color:var(--text3);margin-top:10px;">
-      หมายเหตุ: ของที่เติมจะถูกบวกเข้าช่อง "ของเดิม/มีจำนวน" และ "เหลือ/มีจำนวน" ของสินค้านั้นทันที
-      ไม่กระทบยอดขายของรอบ ถ้าเลือก "สร้างรอบเช็กใหม่" ระบบจะตั้งยอดขายของรอบใหม่เป็น 0 ให้อัตโนมัติเหมือนเพิ่มรอบเช็กปกติ
+      หมายเหตุ: ถ้าสินค้านั้นไม่มีอยู่ในรอบล่าสุด (มีแต่ในรอบเก่าที่ค้นเจอ) ระบบจะเพิ่มรายการสินค้านี้เข้ารอบล่าสุดให้อัตโนมัติก่อนเติมจำนวน
+      เพื่อให้ของที่เติมยังคงอยู่ในรอบที่ใช้งานต่อได้จริง ไม่กระทบยอดขายของรอบ ถ้าเลือก "สร้างรอบเช็กใหม่" ระบบจะตั้งยอดขายของรอบใหม่เป็น 0 ให้อัตโนมัติเหมือนเพิ่มรอบเช็กปกติ
     </p>
     <div class="form-actions">
       <button class="btn btn-ghost" onclick="closeRestockModal()">ยกเลิก</button>
