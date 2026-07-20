@@ -1,9 +1,31 @@
 // ==================== RENDER ====================
+let dashboardDirty = true;
+let inventoryDirty = true;
+let restockDirty = true;
+let revenueDirty = true;
+let stockCheckDirty = true;
+
+function markDashboardDirty() { dashboardDirty = true; }
+function markInventoryDirty() { inventoryDirty = true; }
+function markRestockDirty() { restockDirty = true; }
+function markRevenueDirty() { revenueDirty = true; }
+function markStockCheckDirty() { stockCheckDirty = true; }
+function markAllDirty() {
+  dashboardDirty = inventoryDirty = restockDirty = revenueDirty = stockCheckDirty = true;
+}
+function getActivePage() {
+  const activePage = document.querySelector('.page.active');
+  return activePage ? activePage.id.replace('page-', '') : 'dashboard';
+}
+function renderPage(page) {
+  if(page === 'dashboard') return renderDashboard();
+  if(page === 'inventory') return renderInventory();
+  if(page === 'stockcheck') return renderStockCheck();
+  if(page === 'restock') return renderRestock();
+  if(page === 'revenue') return renderRevenue();
+}
 function renderAll() {
-  renderDashboard();
-  renderInventory();
-  renderRestock();
-  renderRevenue();
+  renderPage(getActivePage());
   updateBadge();
 }
 
@@ -73,6 +95,8 @@ function getFilteredItems() {
 }
 
 function renderInventory() {
+  if (!inventoryDirty) return;
+  inventoryDirty = false;
   const filtered = getFilteredItems();
   document.getElementById('item-count-label').textContent = `แสดง ${filtered.length} จาก ${items.length} รายการ`;
   document.getElementById('inventory-table').innerHTML = filtered.map((i, idx) => `
@@ -118,6 +142,7 @@ function editCell(id, field, td) {
     if(item.stock <= 0) item.status = 'หมด!';
     else if(totalSt > 0 && item.stock < totalSt * 0.4) item.status = 'เติมของ!';
     else item.status = '✓ OK';
+    markAllDirty();
     renderAll();
   };
   input.addEventListener('blur', save);

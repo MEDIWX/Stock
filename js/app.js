@@ -43,7 +43,6 @@ function showPage(page, navEl = null) {
 
   targetPage.classList.add('active');
 
-  // รองรับทั้ง onclick="showPage('inventory', this)" และการคลิกจากเมนูปกติ
   const activeNav = navEl || document.querySelector(`.nav-item[data-page="${page}"]`);
   if (activeNav) activeNav.classList.add('active');
 
@@ -59,9 +58,10 @@ function showPage(page, navEl = null) {
   document.getElementById('page-title').textContent = title[0];
   document.getElementById('page-sub').textContent = title[1];
 
-  // render หน้าที่ต้อง refresh ตอนเปิด
   if (page === 'stockcheck' && typeof renderStockCheck === 'function') renderStockCheck();
+  if (page === 'inventory' && typeof renderInventory === 'function') renderInventory();
   if (page === 'revenue' && typeof renderRevenue === 'function') renderRevenue();
+  if (page === 'restock' && typeof renderRestock === 'function') renderRestock();
 }
 
 // ==================== FILTERS ====================
@@ -69,10 +69,11 @@ function filterCat(cat, el) {
   filterCatVal = cat;
   document.querySelectorAll('#page-inventory .tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
+  markInventoryDirty();
   renderInventory();
 }
-function filterStatus(val) { filterStatusVal = val; renderInventory(); }
-function searchItems(val) { searchVal = val; renderInventory(); }
+function filterStatus(val) { filterStatusVal = val; markInventoryDirty(); renderInventory(); }
+function searchItems(val) { searchVal = val; markInventoryDirty(); renderInventory(); }
 
 // ==================== MODAL ====================
 function openAddModal() {
@@ -115,11 +116,13 @@ function saveItem() {
     items.push({id: nextId++, ...data});
   }
   closeModal();
+  markAllDirty();
   renderAll();
 }
 function deleteItem(id) {
   if(!confirm('ลบสินค้านี้?')) return;
   items = items.filter(i=>i.id!==id);
+  markAllDirty();
   renderAll();
 }
 
@@ -359,14 +362,4 @@ if (restockModalEl) {
   restockModalEl.addEventListener('click', e => {
     if (e.target === restockModalEl) closeRestockModal();
   });
-}
-
-// Override renderAll to include stock check page
-function renderAll() {
-  renderDashboard();
-  renderInventory();
-  renderStockCheck();
-  renderRestock();
-  renderRevenue();
-  updateBadge();
 }

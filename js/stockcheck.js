@@ -43,9 +43,13 @@ function renderRoundSelect() {
   sel.innerHTML = STOCK_ROUNDS.map((r,i)=>`<option value="${i}" ${i===activeRoundIndex?'selected':''}>${r.date}</option>`).join('');
 }
 
+let stockCheckVirtual = { scrollTop: 0, itemHeight: 36, buffer: 10 };
+
 function renderStockCheck() {
   const wrap = document.getElementById('stockcheck-tables');
   if(!wrap) return;
+  if(!stockCheckDirty) return;
+  stockCheckDirty = false;
   renderRoundSelect();
   const round = STOCK_ROUNDS[activeRoundIndex];
   const total = roundTotals(round);
@@ -64,12 +68,11 @@ function renderStockCheck() {
   let matchCount = 0;
   const tablesHTML = round.tables.map((t, ti) => {
     const st = tableTotals(t);
-    // เมื่อมีคำค้นหา: กรองแถวที่ชื่อตรงกับคำค้นหาในตารางนี้ (ค้นข้ามทุกตาราง)
     const rowsWithIdx = t.rows.map((r, ri) => ({ r, ri }));
     const visibleRows = q ? rowsWithIdx.filter(({ r }) => String(r.name||'').toLowerCase().includes(q)) : rowsWithIdx;
     matchCount += visibleRows.length;
-    if(q && visibleRows.length === 0) return ''; // ไม่มีรายการตรงในตารางนี้ -> ซ่อนตารางทั้งหมด
-    return `<div class="table-wrap excel-section">
+    if(q && visibleRows.length === 0) return '';
+    return `<div class="table-wrap excel-section stockcheck-table" data-table-index="${ti}">
       <div class="excel-section-head">
         <div style="font-weight:700;">${t.name}${q ? ` <span style="color:var(--text3); font-weight:400; font-size:11px;">(พบ ${visibleRows.length} รายการ)</span>` : ''}</div>
         <div class="excel-summary">
@@ -79,7 +82,7 @@ function renderStockCheck() {
           <button class="btn btn-ghost" style="padding:5px 9px;font-size:11px" onclick="addStockRow(${ti})">＋ เพิ่มสินค้า</button>
         </div>
       </div>
-      <div class="table-container">
+      <div class="table-container stockcheck-scroll" data-table-index="${ti}">
         <table class="excel-table">
           <thead><tr>
             <th style="width:36px">#</th>
@@ -97,7 +100,7 @@ function renderStockCheck() {
             <th class="num">เป็นเงิน</th>
             <th>สถานะ</th>
           </tr></thead>
-          <tbody>${visibleRows.map(({ r, ri }) => stockRowHTML(ti, ri, r, q)).join('')}</tbody>
+          <tbody data-table-index="${ti}"></tbody>
         </table>
       </div>
     </div>`;
@@ -111,11 +114,74 @@ function renderStockCheck() {
   wrap.innerHTML = q && matchCount === 0
     ? '<div class="table-wrap"><div class="empty">ไม่พบสินค้าที่ตรงกับคำค้นหานี้ในรอบเช็กนี้</div></div>'
     : tablesHTML;
+
+  const scrollContainers = wrap.querySelectorAll('.stockcheck-scroll');
+  scrollContainers.forEach(el => {
+    el.dataset.lastStart = '-1';
+    el.dataset.lastEnd = '-1';
+    el.removeEventListener('scroll', handleStockCheckScroll);
+    el.addEventListener('scroll', handleStockCheckScroll);
+    if(el.dataset.lastQuery !== q) {
+      el.dataset.lastQuery = q;
+      el.scrollTop = 0;
+    }
+  });
+  requestAnimationFrame(() => {
+    scrollContainers.forEach(el => updateStockCheckVisibleRows(el, round, q));
+  });
+}
+
+function handleStockCheckScroll(event) {
+  const scrollEl = event.currentTarget;
+  if(scrollEl._rafId) cancelAnimationFrame(scrollEl._rafId);
+  scrollEl._rafId = requestAnimationFrame(() => {
+    scrollEl._rafId = null;
+    const round = STOCK_ROUNDS[activeRoundIndex];
+    const q = (typeof stockCheckSearchVal !== 'undefined' ? stockCheckSearchVal : '').trim().toLowerCase();
+    updateStockCheckVisibleRows(scrollEl, round, q);
+  });
+}
+
+function updateStockCheckVisibleRows(container, round, q, tableIndexOverride) {
+  const tableIndex = tableIndexOverride !== undefined ? tableIndexOverride : Number(container.dataset.tableIndex);
+  const table = round.tables[tableIndex];
+  if(!table) return;
+  const rowsWithIdx = table.rows.map((r, ri) => ({ r, ri }));
+  const visibleRows = q ? rowsWithIdx.filter(({ r }) => String(r.name||'').toLowerCase().includes(q)) : rowsWithIdx;
+  const tbody = container.querySelector('tbody');
+  if(!tbody) return;
+  const visibleCount = visibleRows.length;
+  if(visibleCount === 0) {
+    tbody.innerHTML = '<tr><td colspan="14" class="empty">ไม่มีรายการ</td></tr>';
+    return;
+  }
+  const rowHeight = stockCheckVirtual.itemHeight;
+  const viewportHeight = Math.max(container.clientHeight || rowHeight * 10, rowHeight * 10);
+  const start = Math.max(0, Math.floor(container.scrollTop / rowHeight) - stockCheckVirtual.buffer);
+  const end = Math.min(visibleCount, Math.ceil((container.scrollTop + viewportHeight) / rowHeight) + stockCheckVirtual.buffer);
+  const lastStart = Number(container.dataset.lastStart || -1);
+  const lastEnd = Number(container.dataset.lastEnd || -1);
+  const lastQuery = container.dataset.lastQuery || '';
+  if(lastQuery === q && lastStart === start && lastEnd === end) {
+    return;
+  }
+  container.dataset.lastStart = String(start);
+  container.dataset.lastEnd = String(end);
+  container.dataset.lastQuery = q;
+  const topPadding = start * rowHeight;
+  const bottomPadding = Math.max(0, (visibleCount - end) * rowHeight);
+  const visibleSection = visibleRows.slice(start, end).map(({ r, ri }) => stockRowHTML(tableIndex, ri, r, q)).join('');
+  tbody.innerHTML = `
+    <tr class="spacer-row" style="height:${topPadding}px;"><td colspan="14"></td></tr>
+    ${visibleSection}
+    <tr class="spacer-row" style="height:${bottomPadding}px;"><td colspan="14"></td></tr>
+  `;
 }
 
 // ==================== ค้นหาในตารางรอบเช็กสต็อก (ทุกตาราง) ====================
 function searchStockCheck(val) {
   stockCheckSearchVal = val || '';
+  stockCheckDirty = true;
   renderStockCheck();
 }
 
@@ -174,6 +240,7 @@ function editStockCell(tableIndex, rowIndex, field, td, type) {
     syncItemsFromActiveRound();
     localStorage.setItem('STOCK_ROUNDS_DATA', JSON.stringify(STOCK_ROUNDS));
     supabaseSaveRound(activeRoundIndex);
+    markAllDirty();
     renderAll();
   };
   input.addEventListener('blur', save);
@@ -220,6 +287,7 @@ function addStockRow(tableIndex) {
   const table = STOCK_ROUNDS[activeRoundIndex].tables[tableIndex];
   table.rows.push({id:`${STOCK_ROUNDS[activeRoundIndex].date}-${table.tableNo}-${Date.now()}`,cat:String(table.tableNo),name:'สินค้าใหม่',shipping:0,cost:0,totalCost:0,profit45:0,price:0,added:0,previous:0,totalStock:0,remaining:0,sold:0,revenue:0,status:'✓ OK'});
   syncItemsFromActiveRound();
+  markAllDirty();
   renderAll();
 }
 
@@ -261,6 +329,7 @@ function addNewRound() {
   STOCK_ROUNDS.unshift(newRound);
   activeRoundIndex = 0;
   syncItemsFromActiveRound();
+  markAllDirty();
   renderAll();
 }
 
@@ -291,6 +360,7 @@ async function deleteCurrentRound() {
   await supabaseLoadRounds();
 
   syncItemsFromActiveRound();
+  markAllDirty();
   renderAll();
 
   alert('ลบรอบเช็กสำเร็จ');
@@ -306,11 +376,13 @@ function updateRoundMoney(field, value) {
   const elNet = document.getElementById('sc-net'); if(elNet) elNet.textContent = fmt(total.net);
   localStorage.setItem('STOCK_ROUNDS_DATA', JSON.stringify(STOCK_ROUNDS));
   supabaseSaveRound(activeRoundIndex);
+  markAllDirty();
 }
 
 function switchRound(i) {
   activeRoundIndex = Number(i)||0;
   syncItemsFromActiveRound();
+  markAllDirty();
   renderAll();
 }
 
@@ -327,6 +399,7 @@ function syncItemsFromActiveRound() {
 function saveStockChecks(showAlert = true) {
   localStorage.setItem('STOCK_ROUNDS_DATA', JSON.stringify(STOCK_ROUNDS));
   supabaseSaveRound(activeRoundIndex);
+  markAllDirty();
   if(showAlert) alert('บันทึกรอบเช็กสต็อกแล้ว ✓ (local + Supabase)');
 }
 
